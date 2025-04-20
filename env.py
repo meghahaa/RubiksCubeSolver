@@ -8,11 +8,18 @@ class RubiksCubeEnv(gym.Env):
     Custom environment for a Rubik's Cube using OpenAI Gym.
     '''
 
-    def __init__(self):
-        super(RubiksCubeEnv, self).__init__()
-        
+    def __init__(self, scramble_moves=1):
         '''
-        Action space with 12 discrete actions: 
+        Initialize the environment.
+        '''
+        self.state = None
+
+        self.scramble_moves = scramble_moves
+
+        super(RubiksCubeEnv, self).__init__()
+
+        '''
+        Action space with 12 discrete actions:
         - 6 faces (U, L, F, R, B, D)
         - Each face can be rotated clockwise or counter-clockwise
         - 6 * 2 = 12 actions
@@ -21,7 +28,7 @@ class RubiksCubeEnv(gym.Env):
         - 6: U', 7: L', 8: F', 9: R', 10: B', 11: D'
         '''
         self.action_space = spaces.Discrete(12)
-        
+
         '''
         Observation space representing the state of the Rubik's Cube:
         - 1D flattened array of size 54 (6 faces * 9 cells per face)
@@ -32,11 +39,11 @@ class RubiksCubeEnv(gym.Env):
         - dtype: int32
         '''
         self.observation_space = spaces.Box(low=0, high=5, shape=(54,), dtype=np.int32)
-        
+
         '''
         Initial state of the Rubik's Cube
         '''
-        self.state = self.get_solved_cube()
+        self.reset()
 
     def get_solved_cube(self):
         '''
@@ -59,19 +66,30 @@ class RubiksCubeEnv(gym.Env):
 
         prev_state = self.state.copy()
         self.rotate(action)
+        observation = self.get_observation()
         reward = self.calculate_reward(prev_state, self.state)
-        done = self.is_solved()
-        
-        return self.state, reward, done, {}
+        terminated = self.is_solved()
+        truncated = False
 
-    def reset(self):
-        '''
-        Reset the environment to the initial state.'
-        '''
+        return observation, reward, terminated, truncated, {}
 
-        self.state = self.get_solved_cube()
+    def get_observation(self):
+        # Convert cube state to observation
         return self.state
-    
+
+    def reset(self, *, seed=None, options=None):
+        '''
+        Reset the environment to scramle moves away from the solved state.'
+        '''
+        super().reset(seed=seed)
+        self.state = self.get_solved_cube()
+        for _ in range(self.scramble_moves):
+            action = self.action_space.sample()
+            self.rotate(action)
+        observation = self.get_observation()
+        info = {}  # Optional: add episode info here
+        return observation, info
+
     def rotate(self, action):
         '''
         Rotate the cube based on the action.
@@ -119,8 +137,8 @@ class RubiksCubeEnv(gym.Env):
             [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,24,25,26,18,19,20,21,22,23,33,34,35,
                    27,28,29,30,31,32,42,43,44,36,37,38,39,40,41,15,16,17,47,50,53,46,49,52,45,48,51]])
 
-        new_state = self.state[idxs[action]] 
-        self.state = new_state     
+        new_state = self.state[idxs[action]]
+        self.state = new_state
 
     def compute_similarity_reward(self, state):
         reward = 0
@@ -128,15 +146,15 @@ class RubiksCubeEnv(gym.Env):
             face_stickers = state[face * 9: (face + 1) * 9]
             center = face_stickers[4]
             reward += np.sum(face_stickers == center)
-        return reward / 54  # Normalize to 0-1  
-        
+        return reward / 54  # Normalize to 0-1
+
     def calculate_reward(self, prev_state, new_state):
         '''
         Calculate the reward based on the current state.
         '''
         if self.is_solved():
             return 100.0
-        
+
         prev_score = self.compute_similarity_reward(prev_state)
         new_score = self.compute_similarity_reward(new_state)
         delta = new_score - prev_score
@@ -147,7 +165,7 @@ class RubiksCubeEnv(gym.Env):
         Check if the Rubik's Cube is solved.
         '''
         return np.all(self.state == self.get_solved_cube())
-    
+
     def render(self, mode='human'):
         '''
         Render the Rubik's Cube.
@@ -204,5 +222,4 @@ class RubiksCubeEnv(gym.Env):
         ax.axis('off')
 
         # Show the plot
-        plt.show()    
-
+        plt.show()
