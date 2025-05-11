@@ -2,22 +2,32 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import matplotlib.pyplot as plt
+from gymnasium.wrappers import TimeLimit
+from stable_baselines3.common.monitor import Monitor
+import gymnasium as gym
 
 class RubiksCubeEnv(gym.Env):
     '''
     Custom environment for a Rubik's Cube using OpenAI Gym.
+
+    :param scramble_moves: Number of scrambles to perform on the cube during reset.
     '''
 
-    def __init__(self, scramble_moves=1):
-        '''
-        Initialize the environment.
-        '''
+    def __init__(self, scramble_moves):
+        
         self.state = None
+        '''
+        State of the Rubik's Cube represented as a 1D array of size 54.
+        '''
 
         self.scramble_moves = scramble_moves
+        '''
+        Scramble moves to be performed on the cube during reset.
+        '''
 
         super(RubiksCubeEnv, self).__init__()
 
+        self.action_space = spaces.Discrete(12)
         '''
         Action space with 12 discrete actions:
         - 6 faces (U, L, F, R, B, D)
@@ -27,8 +37,8 @@ class RubiksCubeEnv(gym.Env):
         - 0: U, 1: L, 2: F, 3: R, 4: B, 5: D
         - 6: U', 7: L', 8: F', 9: R', 10: B', 11: D'
         '''
-        self.action_space = spaces.Discrete(12)
 
+        self.observation_space = spaces.Box(low=0, high=5, shape=(54,), dtype=np.int32)
         '''
         Observation space representing the state of the Rubik's Cube:
         - 1D flattened array of size 54 (6 faces * 9 cells per face)
@@ -38,12 +48,10 @@ class RubiksCubeEnv(gym.Env):
         - Shape: (54,)
         - dtype: int32
         '''
-        self.observation_space = spaces.Box(low=0, high=5, shape=(54,), dtype=np.int32)
 
-        '''
-        Initial state of the Rubik's Cube
-        '''
         self.reset()
+
+        print("Rubik's Cube Environment Initialized with Scramble Moves:", self.scramble_moves)
 
     def get_solved_cube(self):
         '''
@@ -74,12 +82,14 @@ class RubiksCubeEnv(gym.Env):
         return observation, reward, terminated, truncated, {}
 
     def get_observation(self):
-        # Convert cube state to observation
+        '''
+        Returns the current state of the Rubik's Cube.
+        '''
         return self.state
 
     def reset(self, *, seed=None, options=None):
         '''
-        Reset the environment to scramle moves away from the solved state.'
+        Reset the environment to scramble moves away from the solved state.
         '''
         super().reset(seed=seed)
         self.state = self.get_solved_cube()
@@ -87,7 +97,7 @@ class RubiksCubeEnv(gym.Env):
             action = self.action_space.sample()
             self.rotate(action)
         observation = self.get_observation()
-        info = {}  # Optional: add episode info here
+        info = {} 
         return observation, info
 
     def rotate(self, action):
@@ -141,6 +151,11 @@ class RubiksCubeEnv(gym.Env):
         self.state = new_state
 
     def compute_similarity_reward(self, state):
+        '''
+        Compute the similarity reward based on the current state.
+        The reward is calculated based on the number of stickers that match their center color.
+        The more stickers that match, the higher the reward.
+        '''
         reward = 0
         for face in range(6):
             face_stickers = state[face * 9: (face + 1) * 9]
@@ -150,8 +165,8 @@ class RubiksCubeEnv(gym.Env):
 
     def calculate_reward(self, prev_state, new_state):
         '''
-        Calculate the reward based on the current state.
-        '''
+        Calculate the reward based on the change in similarity.
+        The reward is shaped to encourage the agent to make progress towards solving the cube.'''
         if self.is_solved():
             return 100.0
 
@@ -223,3 +238,22 @@ class RubiksCubeEnv(gym.Env):
 
         # Show the plot
         plt.show()
+
+def make_env(scrambles_away,max_steps_per_episode=100):
+    '''
+    Create and return the Rubik's Cube environment.
+
+    @param scrambles_away: Number of scrambles to perform on the cube during reset.
+    @param max_steps_per_episode: Maximum number of steps per episode.
+    '''
+    env = RubiksCubeEnv(scramble_moves=scrambles_away)
+
+    # Set the maximum number of steps per episode
+    env = TimeLimit(env, max_episode_steps=max_steps_per_episode)
+    # Monitor the environment to log episode stats
+    env = Monitor(env)
+    return env
+
+
+# env=make_env(scrambles_away=0)
+# env.render()
